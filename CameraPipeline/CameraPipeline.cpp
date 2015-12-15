@@ -139,7 +139,6 @@ private:
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {
                 auto & p = result.Pixels[i * w + j];
-                //p.r = p.b = p.g = pix[i * w + j];
                 if ((i + j) % 2 == 0) {
                     // green pixel
                     p.g = pix[i * w + j];
