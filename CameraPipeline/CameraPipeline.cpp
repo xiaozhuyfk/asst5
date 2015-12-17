@@ -1,5 +1,8 @@
 #include "CameraSensor.h"
 #include "Image.h"
+#include <stdio.h>
+
+#define INITIAL_FOCUS 500
 
 class CameraPipeline {
 private:
@@ -8,8 +11,109 @@ private:
 
 private:
 
+    double edge_detection(unsigned char *buf, int w, int h) {
+        double xGradient[] = {
+                -1.0, 0.0, 1.0,
+                -2.0, 0.0, 2.0,
+                -1.0, 0.0, 1.0
+        };
+
+        double yGradient[] = {
+                -1.0, -2.0, -1.0,
+                0.0, 0.0, 0.0,
+                1.0, 2.0, 1.0
+        };
+
+        double output[w * h];
+        for (int j = 0; j < h; j++) {
+            for (int i = 0; i < w; i++) {
+                double tmp;
+                for (int jj = 0; jj < 3; jj++) {
+                    for (int ii = 0; ii < 3; ii++) {
+                        int row = j + jj;
+                        int col = i + ii;
+                        double value = 0;
+                        if (in_bound(w, h, row, col)) {
+                            value = ((int) buf[row * w + col]) * xGradient[jj*3 + ii] +
+                                    ((int) buf[row * w + col]) * yGradient[jj*3 + ii];
+                        }
+                        tmp += value;
+                    }
+                }
+                output[j * w + i] = tmp;
+            }
+        }
+
+        int cannyCount = 0;
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w; j++) {
+                double value = output[i * w + j];
+                if (value > 0) {
+                    cannyCount++;
+                }
+            }
+        }
+
+        return ((double) cannyCount) / (w * h);
+    }
+
+    double evaluate_focus(int focus) {
+        sensor->SetFocus(focus);
+        List<unsigned char> buffer;
+        buffer.SetSize((sensor->GetImageHeight()) *
+                (sensor->GetImageWidth() / 2));
+        sensor->ReadSensorData(buffer.Buffer(),
+                sensor->GetImageWidth() / 4,
+                0,
+                sensor->GetImageWidth() / 2,
+                sensor->GetImageHeight());
+        return edge_detection(buffer.Buffer(),
+                sensor->GetImageWidth() / 2,
+                sensor->GetImageHeight());
+    }
+
     void AutoFocus() {
-        sensor->SetFocus(initialFocus);
+        List<int> focusList;
+        for (int focus = 200; focus < 1500; focus += 50) {
+            focusList.Add(focus);
+        }
+
+        int index;
+        List<double> scoreList;
+        for (index = 0; index < focusList.Count(); index++) {
+            scoreList.Add(evaluate_focus(focusList[index]));
+        }
+
+        double max = Max(scoreList);
+        double min = Min(scoreList);
+
+        double score, prev;
+        int sign = 1;
+        int timestep = 200;
+        int focus;
+        if (min < 0.2) {
+            focus = focusList[scoreList.IndexOf(Min(scoreList))];
+        } else {
+            focus = INITIAL_FOCUS;
+        }
+        score = evaluate_focus(focus);
+        prev = score;
+        printf("score = %f\n", score);
+
+        while (timestep > 20) {
+            focus += sign * timestep;
+            score = evaluate_focus(focus);
+            printf("score = %f\n", score);
+            sign = (score - prev > 0) ? sign : -sign;
+            if (sign < 0) {
+                timestep /= 2;
+            }
+            prev = score;
+            printf("focus: %d\n", focus);
+        }
+
+        printf("final focus: %d\n", focus);
+        sensor->SetFocus(focus);
     }
 
     int in_bound(int w, int h, int i, int j) {
