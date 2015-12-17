@@ -2,18 +2,15 @@
 #include "Image.h"
 #include <stdio.h>
 
-#define INITIAL_FOCUS 500
-
-#include <stdio.h>
-
 #define BLUR_RANGE 3
 #define ROW_BLUR_RANGE 1
 #define ROW_BLUR_RANGE_LEVEL_2 5
 #define G_COMP 0.95
-#define PIX_THRESHOLD 40
+#define PIX_THRESHOLD 30
 #define ROW_THRESHOLD 1
 #define PRE_THRESHOLD 40
 #define BRIGHTNESS_GAIN 1.05
+#define INITIAL_FOCUS 500
 
 class CameraPipeline {
 private:
@@ -109,21 +106,17 @@ private:
         }
         score = evaluate_focus(focus);
         prev = score;
-        printf("score = %f\n", score);
 
         while (timestep > 20) {
             focus += sign * timestep;
             score = evaluate_focus(focus);
-            printf("score = %f\n", score);
             sign = (score - prev > 0) ? sign : -sign;
             if (sign < 0) {
                 timestep /= 2;
             }
             prev = score;
-            printf("focus: %d\n", focus);
         }
 
-        printf("final focus: %d\n", focus);
         sensor->SetFocus(focus);
     }
 
